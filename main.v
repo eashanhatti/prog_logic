@@ -2,6 +2,7 @@ Require Import Coq.Arith.PeanoNat.
 Require Import Coq.Arith.Even.
 Require Import Coq.Lists.List.
 Require Import Coq.Program.Basics.
+Require Import Coq.Program.Equality.
 Require Import Init.Datatypes.
 Require Import Coq.Logic.FunctionalExtensionality.
 Import ListNotations.
@@ -13,14 +14,11 @@ Require Import Coq.Sets.Ensembles.
 Require Import Coq.Logic.PropExtensionality.
 Require Import Coq.Init.Logic.
 Require Import Coq.Logic.PropExtensionalityFacts.
+Require Import Coq.Logic.ProofIrrelevance.
 Set Allow StrictProp.
 Set Primitive Projections.
 
 Ltac exfalsoby e := exfalso; exact e.
-
-Inductive truncate (a : Type) : SProp :=
-| trunc : a -> truncate a.
-Arguments trunc {a}.
 
 Arguments exist {A} {P}.
 Open Scope program_scope.
@@ -32,14 +30,34 @@ Record poset := {
   ord_antisym : Antisymmetric carrier eq ord
 }.
 
-CoInductive downset (pset : poset) := mk_downset {
+Record downset (pset : poset) := mk_downset {
   has : carrier pset -> Prop;
   closed x y : ord pset x y -> has y -> has x
 }.
 Arguments has {pset}.
 Arguments closed {pset}.
+Unset Printing Records.
 
-Axiom downset_extensionality : forall {pset} {dset1 dset2 : downset pset}, (forall x, has dset1 x <-> has dset2 x) -> dset1 = dset2.
+Axiom predicate_extensionality : forall {a} {P Q : a -> Prop}, (forall x, P x <-> Q x) -> P = Q.
+
+Theorem downset_extensionality {pset} {dset1 dset2 : downset pset} : (forall x, has dset1 x <-> has dset2 x) -> dset1 = dset2.
+intro.
+assert (has dset1 = has dset2).
+exact (predicate_extensionality H).
+induction dset1. induction dset2.
+simpl in H0.
+generalize dependent closed0.
+rewrite H0.
+intros.
+assert (closed0 = closed1).
+extensionality x.
+extensionality y.
+extensionality ord.
+extensionality h.
+exact (proof_irrelevance (has1 x) _ _).
+rewrite H1.
+reflexivity.
+Qed.
 
 Class monad (m : Type -> Type) : Type := {
   unit {a} : a -> m a;
@@ -254,12 +272,26 @@ exact (StratId s H).
 exact (downset_extensionality H).
 Qed.
 
+Lemma sym {a} {x y : a} : x = y -> y = x.
+auto.
+Qed.
+
 Lemma strat_mult_unit_id {esig a} : @strat_mult esig a ∘ strat_unit = strat_id.
 Proof.
 extensionality s.
 assert (forall p, has ((@strat_mult esig a ∘ strat_unit) s) p <-> has (strat_id s) p).
-admit.
-exact (downset_extensionality H).
+intro.
+split.
+intro.
+rewrite strat_id_idem.
+destruct H.
+destruct H0.
+inversion H.
+exact H0.
+induction h.
+inversion ord0. subst.
+exact H0. subst.
+exact (IHh (ord_play_trans_prf _ _ _ ord0 ord1)).
 Admitted.
 
 Lemma strat_mult_fmap_unit_id {esig a} : @strat_mult esig a ∘ strat_fmap strat_unit = strat_id.
@@ -283,11 +315,13 @@ Inductive strat_plus_has {esig a} (s1 s2 : strat esig a) : play esig a -> Prop :
 | StratPlusInjLeft {p} (_ : has s1 p) : strat_plus_has s1 s2 p
 | StratPlusInjRight {p} (_ : has s2 p) : strat_plus_has s1 s2 p
 | StratPlusDownclose (p1 p2 : _) (ord : ord_play p1 p2) (h : strat_plus_has s1 s2 p2) : strat_plus_has s1 s2 p1.
+Arguments StratPlusInjLeft {esig} {a} {s1} {s2} {p}.
+Arguments StratPlusInjRight {esig} {a} {s1} {s2} {p}.
 
 Ltac elim_strat_plus h :=
   refine (match h with
-          | StratPlusInjLeft _ _ _ => _
-          | StratPlusInjRight _ _ _ => _
+          | StratPlusInjLeft _ => _
+          | StratPlusInjRight _ => _
           | StratPlusDownclose _ _ _ _ _ _ => _
           end).
 
@@ -340,7 +374,7 @@ exfalsoby (strat_bot_impl_false h).
 exact h.
 exact (closed s _ _ o (strat_plus_has_bot_cancel_l s0)).
 intro.
-exact (StratPlusInjRight _ _ H).
+exact (StratPlusInjRight H).
 exact (downset_extensionality H).
 Qed.
 
@@ -351,11 +385,28 @@ split.
 intro.
 exact (strat_plus_has_bot_cancel_r H).
 intro.
-exact (StratPlusInjLeft _ _ H).
+exact (StratPlusInjLeft H).
 exact (downset_extensionality H).
 Qed.
 
-Lemma strat_plus_assoc {esig a} {s1 s2 s3 : strat esig a} : strat_plus s1 (strat_plus s2 s3) = strat_plus (strat_plus s1 s2) s3.
+Fixpoint strat_plus_has_assoc {esig a} {s1 s2 s3 : strat esig a} (p : play esig a) {struct p} :
+  strat_plus_has s1 (strat_plus s2 s3) p = strat_plus_has (strat_plus s1 s2) s3 p.
+assert (has (strat_plus s1 (strat_plus s2 s3)) p <-> has (strat_plus (strat_plus s1 s2) s3) p).
+admit.
+exact (propositional_extensionality _ _ H).
+Admitted.
+
+Fixpoint strat_plus_assoc {esig a} {s1 s2 s3 : strat esig a} : strat_plus s1 (strat_plus s2 s3) = strat_plus (strat_plus s1 s2) s3.
+assert (forall p, has (strat_plus s1 (strat_plus s2 s3)) p <-> has (strat_plus (strat_plus s1 s2) s3) p).
+intro.
+split.
+intro.
+induction H.
+refine (StratPlusInjLeft _).
+exact (StratPlusInjLeft H).
+simpl.
+rewrite (sym (strat_plus_has_assoc p)).
+exact (StratPlusInjRight H).
 Admitted.
 
 Local Instance strat_additive_monad {esig} : additive_monad (strat esig) := {
@@ -387,20 +438,60 @@ Axiom DEFINE_strat_star :
         (strat_star_has s)
         (StratStarDownclose s).
 
+Inductive strat_emp_has {esig a} : play esig a -> Prop :=
+| StratEmp : strat_emp_has []
+| StratEmpDownclose (p1 p2 : _) (ord : ord_play p1 p2) (h : strat_emp_has p2) : strat_emp_has p1.
+Definition strat_emp {esig a} : strat esig a :=
+  mk_downset
+    (play_poset esig a)
+    strat_emp_has
+    StratEmpDownclose.
+
 Definition assert {esig} (b : bool) : strat esig unit_ty :=
   if b then
     unit tt
   else
-    strat_bottom.
-Definition ret {esig a} := @unit esig a.
-Definition skip {esig} : strat esig unit_ty := unit tt.
+    strat_emp.
+Definition ret {esig a} := @strat_unit esig a.
+Definition skip {esig} : strat esig unit_ty := strat_unit tt.
+
+Inductive strat_invoke_has {esig} (l : label esig) (x : par esig l) : play esig (ar esig l) -> Prop :=
+| StratInvoke {v} : strat_invoke_has l x [Ret v; Res l v; Inv l x]
+| StratInvokeDownclose (p1 p2 : _) (ord : ord_play p1 p2) (h : strat_invoke_has l x p2) : strat_invoke_has l x p1.
+
+Definition strat_invoke {esig} (l : label esig) (x : par esig l) : strat esig (ar esig l) :=
+  mk_downset
+    (play_poset esig (ar esig l))
+    (strat_invoke_has l x)
+    (StratInvokeDownclose l x).
 
 Notation "s1 + s2" := (strat_plus s1 s2) (at level 50, left associativity).
 (* Notation "s *" := (strat_star s) (at level 49). *)
 Notation "x <- s1 ;; s2" := (strat_bind s1 (fun x => s2)) (at level 61, s1 at next level, right associativity).
 Notation "s1 ;; s2" := (strat_bind s1 (fun _ => s2)) (at level 61, right associativity).
+Notation "l [ esig , x ]" := (@strat_invoke esig l x) (at level 2).
 
 Definition sif {esig a} (b : bool) (s1 s2 : strat esig a) : strat esig a :=
   (assert b ;; s1) + (assert (negb b) ;; s2).
 Definition while {esig a} (b : bool) (s : strat esig a) : strat esig a :=
   strat_star (assert b ;; s).
+
+Definition nat_sig : effect_sig := {|
+  label := unit_ty;
+  par := const nat;
+  ar := const nat
+|}.
+
+Definition state_sig (a : Type) : effect_sig := {|
+  label := bool;
+  par := fun b =>
+    if b then (* get *)
+      unit_ty
+    else (* set *)
+      a;
+  ar := fun b =>
+    if b then
+      a
+    else
+      unit_ty
+|}.
