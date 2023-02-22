@@ -1,8 +1,5 @@
-Require Import Coq.Arith.PeanoNat.
-Require Import Coq.Arith.Even.
 Require Import Coq.Lists.List.
 Require Import Coq.Program.Basics.
-Require Import Coq.Program.Equality.
 Require Import Init.Datatypes.
 Require Import Coq.Logic.FunctionalExtensionality.
 Import ListNotations.
@@ -10,13 +7,8 @@ Require Import Coq.Init.Nat.
 Require Import Coq.Init.Specif.
 Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Relations.Relation_Definitions.
-Require Import Coq.Sets.Ensembles.
 Require Import Coq.Logic.PropExtensionality.
-Require Import Coq.Init.Logic.
-Require Import Coq.Logic.PropExtensionalityFacts.
-Require Import Coq.Logic.ProofIrrelevance.
-Set Allow StrictProp.
-Set Primitive Projections.
+Unset Printing Records.
 
 Ltac exfalsoby e := exfalso; exact e.
 
@@ -36,7 +28,6 @@ Record downset (pset : poset) := mk_downset {
 }.
 Arguments has {pset}.
 Arguments closed {pset}.
-Unset Printing Records.
 
 Axiom predicate_extensionality : forall {a} {P Q : a -> Prop}, (forall x, P x <-> Q x) -> P = Q.
 
