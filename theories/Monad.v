@@ -1,3 +1,6 @@
+Require Import Coq.Program.Basics.
+Open Scope program_scope.
+
 Class monad (m : Type -> Type) : Type := {
   unit {a} : a -> m a;
   fmap {a b} : (a -> b) -> m a -> m b;

@@ -3,8 +3,7 @@ Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.Logic.FunctionalExtensionality.
 Require Import Coq.Logic.PropExtensionality.
 Require Import Coq.Program.Basics.
-Load "Monad.v" as Monad.
-Open Scope program_scope.
+Load "Monad.v".
 
 Axiom predicate_extensionality : forall {a} {P Q : a -> Prop}, (forall x, P x <-> Q x) -> P = Q.
 
@@ -118,18 +117,10 @@ Definition downset_mult {a} `{poset a} (dset : downset (downset a)) : downset a 
   downclosed := downclose_has_is_downclosed
 |}.
 
-Lemma downset_unit_ord {a} `{poset a} {dset0 dset1 : downset a} : has (downset_unit dset0) dset1 -> ord dset1 dset0.
-intro.
-destruct H0.
-destruct H0.
-inversion H0.
-exact H1.
-Qed.
-
 Lemma downset_mult_unit_id {a} `{poset a} : downset_mult (a:=a) ∘ downset_unit = id.
 unfold compose.
 extensionality dset.
-assert (forall x, has (downset_mult (downset_unit dset)) x <-> has dset x).
+refine (downset_extensionality _).
 intro.
 split.
 intro.
@@ -139,7 +130,10 @@ destruct H0.
 assert (has dset1 x).
 exact (downclosed dset1 H1 h1).
 assert (ord dset1 dset).
-exact (downset_unit_ord h0).
+destruct h0.
+destruct H2.
+inversion H2.
+exact H3.
 exact (downset_inclusion H2 H0).
 intro.
 exists x.
@@ -151,5 +145,56 @@ exact (DsetUnitHas dset).
 exact ord_refl.
 exact H0.
 exact ord_refl.
-exact (downset_extensionality H0).
 Qed.
+
+Lemma downset_mult_fmap_unit_id {a} `{poset a} : downset_mult (a:=a) ∘ downset_fmap downset_unit = id.
+unfold compose.
+extensionality dset.
+refine (downset_extensionality _).
+intro.
+split.
+intro.
+destruct H0.
+destruct H0.
+destruct H0.
+assert (has dset1 x).
+exact (downclosed dset1 H1 h1).
+assert (ord dset1 dset).
+destruct h0.
+destruct H2.
+destruct H2.
+assert (ord (downset_unit x1) dset).
+refine (OrdDownset _).
+intros.
+induction H2.
+destruct H2.
+inversion H2.
+rewrite H5 in h.
+exact (downclosed dset H4 h).
+exact (ord_trans H3 H2).
+exact (downset_inclusion H2 H0).
+intro.
+exists x.
+split.
+refine (DsetMultHas _ (dset1:= downset_unit x) _ _).
+exists (downset_unit x).
+split.
+refine (DsetFmapHas _ _ _).
+exact H0.
+exact ord_refl.
+exists x.
+split.
+exact (DsetUnitHas x).
+exact ord_refl.
+exact ord_refl.
+Qed.
+
+Lemma downset_mult_assoc {a} `{poset a} : downset_mult (a:=a) ∘ downset_fmap downset_mult = downset_mult ∘ downset_mult.
+unfold compose.
+extensionality dddset.
+refine (downset_extensionality _).
+intro.
+split.
+intro.
+admit.
+intro.
