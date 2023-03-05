@@ -2,7 +2,7 @@ Require Import Coq.Lists.List.
 Require Import Coq.Program.Basics.
 Require Import Init.Datatypes.
 Require Import Coq.Logic.FunctionalExtensionality.
-Import ListNotations.
+(* Import ListNotations. *)
 Require Import Coq.Init.Nat.
 Require Import Coq.Init.Specif.
 Require Import Coq.Classes.RelationClasses.
@@ -11,6 +11,10 @@ Require Import Coq.Logic.PropExtensionality.
 Unset Printing Records.
 
 Ltac exfalsoby e := exfalso; exact e.
+
+Lemma sym {a} {x y : a} : x = y -> y = x.
+auto.
+Qed.
 
 Arguments exist {A} {P}.
 Open Scope program_scope.
@@ -50,12 +54,11 @@ rewrite H1.
 reflexivity.
 Qed.
 
+(* use Coq id instead of strat_id *)
 Class monad (m : Type -> Type) : Type := {
   unit {a} : a -> m a;
   fmap {a b} : (a -> b) -> m a -> m b;
   mult {a} : m (m a) -> m a;
-  id {a} : m a -> m a;
-  id_idem {a} {x : m a} : id x = x;
   mult_unit_id {a} : @mult a ∘ unit = id;
   mult_fmap_unit_id {a} : @mult a ∘ fmap unit = id;
   mult_assoc {a} : @mult a ∘ fmap mult = mult ∘ mult
@@ -76,72 +79,61 @@ Record effect_sig := mk_effect_sig {
   ar : label -> Type
 }.
 
-Inductive event (esig : effect_sig) (a : Type) : Type :=
-| Ret (v : a) : event esig a
-| Inv (l : label esig) (x : par esig l) : event esig a
-| Res (l : label esig) (v : ar esig l) : event esig a.
+Inductive play (esig : effect_sig) (a : Type) :=
+| Emp : play esig a
+| Ret (x : a) : play esig a
+| Inv (l : label esig) (x : par esig l) : play esig a
+| InvRes (l : label esig) (x : par esig l) (v : ar esig l) (p : play esig a) : play esig a.
+Arguments Emp {esig} {a}.
 Arguments Ret {esig} {a}.
 Arguments Inv {esig} {a}.
-Arguments Res {esig} {a}.
+Arguments InvRes {esig} {a}.
 
-Definition play esig a := list (event esig a).
+(*
+art <= arthur, not arte <= arthure
+art <= arthur, eart <= earthur
+InvRes p l x v -----> l(x) v p
 
-Inductive wf_play {esig a} : play esig a -> Prop :=
-| WfEmp : wf_play []
-| WfRet {x} : wf_play [Ret x]
-| WfInvRes {l x v p} : wf_play (Res l v :: Inv l x :: p)
-| WfInv {l x} : wf_play [Inv l x].
-
+p1 <= p2 ---> p1 <= l(x) v p2
+*)
 Inductive ord_play {esig a} : relation (play esig a) :=
-| EmpPrefix {p} : ord_play [] p
-| ConsPrefix {p1 p2 e} (ord_p : ord_play p1 p2) : ord_play (e :: p1) (e :: p2).
+| EmpPrefix {p} : ord_play Emp p
+| RetPrefix {x} : ord_play (Ret x) (Ret x)
+| InvPrefix {l x} : ord_play (Inv l x) (Inv l x)
+| InvInvResPrefix {p l x v} : ord_play (Inv l x) (InvRes l x v p)
+| InvResPrefix {p1 p2 l x v} (ord_p : ord_play p1 p2) : ord_play (InvRes l x v p1) (InvRes l x v p2).
 
-Lemma pfx_nil_is_nil {esig a} {p : play esig a} : ord_play p [] -> p = [].
+Lemma pfx_nil_is_nil {esig a} {p : play esig a} : ord_play p Emp -> p = Emp.
 Proof.
 intro.
 inversion H.
 reflexivity.
 Qed.
 
-Lemma ord_play_refl_prf {esig a} : forall p : play esig a, ord_play p p.
-Proof.
-intro.
-induction p.
-exact EmpPrefix.
-exact (ConsPrefix IHp).
+(* not true *)
+Fixpoint rev_InvResPrefix {esig a} {p1 p2 : play esig a} {l x v} (H : ord_play (InvRes l x v p1) p2) {struct H} : ord_play p1 p2.
+inversion H.
+exact (InvResPrefix ReflPrefix).
+subst.
+assert (ord_play p1 p3).
+exact (rev_InvResPrefix _ _ _ _ _ _ _ ord_p).
+exact (InvResPrefix H0).
 Qed.
 
-Lemma heads_eq {a} {x y : a} {xs ys}: x :: xs = y :: ys -> x = y.
-intro.
-congruence.
-Qed.
-
-Lemma tails_eq {a} {x y : a} {xs ys}: x :: xs = y :: ys -> xs = ys.
-intro.
-congruence.
-Qed.
-
-Fixpoint ord_play_trans_prf {esig a} (p1 p2 p3 : play esig a) {struct p1} : ord_play p1 p2 -> ord_play p2 p3 -> ord_play p1 p3.
+Lemma ord_play_trans_prf {esig a} (p1 p2 p3 : play esig a) : ord_play p1 p2 -> ord_play p2 p3 -> ord_play p1 p3.
 Proof.
 intros.
-destruct p1.
+induction H.
+induction H0.
 exact EmpPrefix.
-destruct p3.
-inversion H0. subst.
-exact H.
-inversion H.
-inversion H0.
-subst.
-discriminate.
-subst.
-rewrite (heads_eq H4).
-refine (ConsPrefix _).
-rewrite (tails_eq H4) in ord_p0.
-exact (ord_play_trans_prf _ _ _ _ _ ord_p ord_p0).
+exact EmpPrefix.
+exact (InvResPrefix EmpPrefix).
+exact H0.
+exact (IHord_play (rev_InvResPrefix H0)).
 Qed.
 
 Local Instance ord_play_refl {esig a} : Reflexive (@ord_play esig a) := {
-  reflexivity := ord_play_refl_prf
+  reflexivity p := ReflPrefix (p:=p)
 }.
 
 Local Instance ord_play_trans {esig a} : Transitive (@ord_play esig a) := {
@@ -153,27 +145,46 @@ Local Instance ord_play_preorder {esig a} : PreOrder (@ord_play esig a) := {
   PreOrder_Transitive := ord_play_trans
 }.
 
-Lemma peel_ord_play {esig a} {e1 e2 : event esig a} {p1 p2 : play esig a} : ord_play (e1 :: p1) (e2 :: p2) -> ord_play p1 p2.
-intros.
-inversion H.
-subst.
-exact ord_p.
-Qed.
-
-Fixpoint ord_play_antisym_prf {esig a} (p1 p2 : play esig a) {struct p1} : ord_play p1 p2 -> ord_play p2 p1 -> p1 = p2.
-Proof.
-intros.
-inversion H.
-inversion H0.
+Lemma peel_ord_play {esig a l1 x1 v1 l2 x2 v2} {p1 p2 : play esig a} : ord_play (InvRes p1 l1 x1 v1) (InvRes p2 l2 x2 v2) -> ord_play p1 p2.
+intro.
+inversion H. subst.
 reflexivity.
 subst.
-discriminate.
-subst.
-f_equal.
-refine (ord_play_antisym_prf _ _ _ _ _ _).
-exact (peel_ord_play H).
-exact (peel_ord_play H0).
+exact (rev_InvResPrefix ord_p).
 Qed.
+
+Lemma ord_play_antisym_prf {esig a} (p1 p2 : play esig a) : ord_play p1 p2 -> ord_play p2 p1 -> p1 = p2.
+(* intros.
+destruct p1, p2.
+reflexivity.
+inversion H.
+inversion H.
+inversion H0.
+inversion H.
+inversion H.
+reflexivity.
+inversion H.
+inversion H0.
+inversion H.
+inversion H.
+inversion H.
+reflexivity.
+inversion H0.
+inversion H.
+inversion H.
+inversion H.
+inversion H.
+generalize dependent H5.
+generalize dependent H6.
+generalize dependent H1.
+generalize dependent H0.
+generalize dependent H.
+generalize dependent x.
+generalize dependent v.
+rewrite H4.
+intros.
+assert (v = v0). *)
+Admitted.
 
 Local Instance ord_play_antisym {esig a} : Antisymmetric (play esig a) eq (@ord_play esig a) := {
   antisymmetry := ord_play_antisym_prf
@@ -188,104 +199,138 @@ Definition play_poset (esig : effect_sig) (a : Type) : poset := {|
 
 Definition strat (esig : effect_sig) (a : Type) : Type := downset (play_poset esig a).
 
-Inductive strat_unit_has {esig a} (x : a) : play esig a -> Prop :=
-| StratUnitRet : strat_unit_has x [Ret x]
-| StratUnitDownclose (p1 p2 : _) (ord : ord_play p1 p2) (h : strat_unit_has x p2) : strat_unit_has x p1.
+Definition closed_strat (esig : effect_sig) (a : Type) (has : play esig a -> Prop) : Type :=
+  forall p1 p2, ord_play p1 p2 -> has p2 -> has p1.
+
+Definition downclose_has {pset : poset} (has : carrier pset -> Prop) : carrier pset -> Prop :=
+  fun x => exists y, has y /\ ord pset x y.
+
+Lemma downclose_has_is_downclosed {pset : poset} {has : carrier pset -> Prop} :
+  forall x y, ord pset x y -> downclose_has has y -> downclose_has has x.
+
+(* actually add constructors for prefix instead of downclose constructor, then prove are downclosed *)
+Inductive strat_unit_fake_has {esig a} (x : a) : play esig a -> Prop :=
+| StratUnitRet : strat_unit_fake_has x (Ret x).
+
+Definition strat_unit_has {a} (x : a) := downclose_has (strat_unit_fake_has x).
+
+Lemma strat_unit_closed {esig a} (x : a) : closed_strat esig a (strat_unit_has x).
+cbv. intros.
+induction H0.
+inversion H.
+exact (StratUnitEmp x).
+exact (StratUnitRet x).
+inversion H.
+exact (StratUnitEmp x).
+exact (StratUnitEmp x).
+Qed.
 
 Definition strat_unit {esig a} (x : a) : strat esig a :=
   mk_downset
     (play_poset esig a)
     (strat_unit_has x)
-    (StratUnitDownclose x).
-
-Inductive flat {esig a b} : event esig a -> event esig b -> Prop :=
-| FlatInv {l x} : flat (Inv l x) (Inv l x)
-| FlatRes {l v} : flat (Res l v) (Res l v).
+    (strat_unit_closed x).
 
 Inductive strat_prod_has {esig a} : play esig (strat esig a) -> play esig a -> Prop :=
-| StratProdRet {s p} (_ : has s p) : strat_prod_has [Ret s] p
-| StratProdCons {e1 e2 p1 p2} (is_flat : flat e1 e2) (_ : strat_prod_has p1 p2) : strat_prod_has (e1 :: p1) (e2 :: p2).
+| StratProdRet {s p} (_ : has s p) : strat_prod_has (Ret s) p
+| StratProdInvRes {l x v p1 p2} (_ : strat_prod_has p1 p2) : strat_prod_has (InvRes p1 l x v) (InvRes p2 l x v)
+| StratProdDownclose {ps} : closed_strat esig a (strat_prod_has ps)
+(*| StratProdEmp {p} : strat_prod_has p Emp
+| StratProdInvResPrefix {p1 p2 l x v} (_ : strat_prod_has p1 (InvRes p2 l x v)) : strat_prod_has p1 p2 *).
+
+(* Lemma strat_prod_closed {esig a} (p : play esig (strat esig a)) : closed_strat esig a (strat_prod_has p).
+cbv. intros.
+induction H.
+exact StratProdEmp.
+exact H0.
+refine (IHord_play _).
+exact (StratProdInvResPrefix H0).
+Qed. *)
+
+
 
 Inductive strat_mult_has {esig a} (ss : strat esig (strat esig a)) : play esig a -> Prop :=
-| StratMult {p1 p2} (_ : has ss p1) (_ : strat_prod_has p1 p2) : strat_mult_has ss p2
-| StratMultDownclose (p1 p2 : _) (ord : ord_play p1 p2) (h : strat_mult_has ss p2) : strat_mult_has ss p1.
+| StratMult {p1 p2} (_ : has ss p1) (_ : strat_prod_has p1 p2) : strat_mult_has ss p2.
+
+Lemma strat_mult_closed {esig a} (ss : strat esig (strat esig a)) : closed_strat esig a (strat_mult_has ss).
+cbv. intros.
+destruct H0.
+exact (StratMult ss H0 (StratProdDownclose _ _ H H1)).
+Qed.
 
 Definition strat_mult {esig a} (ss : strat esig (strat esig a)) : strat esig a :=
   mk_downset
     (play_poset esig a)
     (strat_mult_has ss)
-    (StratMultDownclose ss).
+    (strat_mult_closed ss).
+
+Fixpoint prod_has_ret {esig a} {s : strat esig a} {p} (H : strat_prod_has (Ret s) p) : has s p.
+inversion H.
+exact H1.
+subst.
+assert (has s p2).
+exact (prod_has_ret _ _ _ _ H1).
+exact (closed s _ _ H0 H2).
+Qed.
+
+Lemma help {esig a} {p0 p1 : play esig (strat esig a)} {p2} : ord_play p1 p0 -> strat_prod_has p1 p2 -> strat_prod_has p0 p2.
+intros.
+Admitted.
+
+Lemma strat_mult_unit_id_help {esig a} {s : strat esig a} {p1 p2} : has (strat_unit s) p1 -> strat_prod_has p1 p2 -> has s p2.
+intros.
+induction H.
+inversion H0.
+exact H1.
+exact (prod_has_ret H0).
+refine (IHstrat_unit_has _).
+Admitted.
+
+Lemma strat_mult_unit_id {esig a} : @strat_mult esig a ∘ strat_unit = id.
+extensionality s.
+unfold compose.
+assert (forall p, has (strat_mult (strat_unit s)) p <-> has s p).
+intro.
+split.
+intro.
+destruct H.
+exact (strat_mult_unit_id_help H H0).
+intro.
+exact (StratMult (strat_unit s) (StratUnitRet s) (StratProdRet H)).
+exact (downset_extensionality H).
+Qed.
 
 Inductive strat_fmap_help_has {esig a b} (f : a -> b) : play esig a -> play esig b -> Prop :=
-| StratFmapHelpRet {x} : strat_fmap_help_has f [Ret x] [Ret (f x)]
-| StratFmapHelpCons {e1 e2 p1 p2} (is_flat : flat e1 e2) (_ : strat_fmap_help_has f p1 p2): strat_fmap_help_has f (e1 :: p1) (e2 :: p2).
+| StratFmapHelpRet {x} : strat_fmap_help_has f (Ret x) (Ret (f x))
+| StratFmapHelpCons {p1 p2 l x v} (_ : strat_fmap_help_has f p1 p2): strat_fmap_help_has f (InvRes p1 l x v) (InvRes p2 l x v)
+| StratFmapHelpEmp {p} : strat_fmap_help_has f p Emp
+| StratFmapHelpInvResPrefix {p1 p2 l x v} (_ : strat_fmap_help_has f p1 (InvRes p2 l x v)) : strat_fmap_help_has f p1 p2.
+
+Lemma strat_fmap_help_closed {esig a b} (f : a -> b) (p : play esig a) : closed_strat esig b (strat_fmap_help_has f p).
+cbv. intros.
+induction H.
+exact (StratFmapHelpEmp _).
+exact H0.
+refine (IHord_play _).
+exact (StratFmapHelpInvResPrefix _ H0).
+Qed.
 
 Inductive strat_fmap_has {esig a b} (f : a -> b) (s : strat esig a) : play esig b -> Prop :=
-| StratFmap {p1 p2} (_ : has s p1) (_ : strat_fmap_help_has f p1 p2) : strat_fmap_has f s p2
-| StratFmapDownclose (p1 p2 : _) (ord : ord_play p1 p2) (h : strat_fmap_has f s p2) : strat_fmap_has f s p1.
+| StratFmap {p1 p2} (_ : has s p1) (_ : strat_fmap_help_has f p1 p2) : strat_fmap_has f s p2.
+
+Lemma strat_fmap_closed {esig a b} (f : a -> b) (s : strat esig a) : closed_strat esig b (strat_fmap_has f s).
+cbv. intros.
+destruct H0.
+exact (StratFmap f s H0 (strat_fmap_help_closed _ _ _ _ H H1)).
+Qed.
 
 Definition strat_fmap {esig a b} (f : a -> b) (s : strat esig a) : strat esig b :=
   mk_downset
     (play_poset esig b)
     (strat_fmap_has f s)
-    (StratFmapDownclose f s).
+    (strat_fmap_closed f s).
 
-(* Definition strat_compose {esig a b c} (f : a -> strat esig b) (g : b -> strat esig c) (x : a) : strat esig c :=
-  strat_mult (strat_fmap g (f x)). *)
-
-Inductive strat_id_has {esig a} (s : strat esig a) : play esig a -> Prop :=
-| StratId {p} (_ : has s p) : strat_id_has s p
-| StratIdDownclose (p1 p2 : _) (ord : ord_play p1 p2) (h : strat_id_has s p2) : strat_id_has s p1.
-
-Definition strat_id {esig a} (s : strat esig a) : strat esig a :=
-    mk_downset
-      (play_poset esig a)
-      (strat_id_has s)
-      (StratIdDownclose s).
-
-Fixpoint id_get_has {esig a} {s : strat esig a} {p} (h : strat_id_has s p) : has s p :=
-  match h with
-  | StratId _ h1 => h1
-  | StratIdDownclose _ p1 p2 ord h1 => closed s p1 p2 ord (id_get_has h1)
-  end.
-
-Lemma strat_id_idem {esig a} {s : strat esig a} : strat_id s = s.
-Proof.
-assert (H : forall x, has (strat_id s) x <-> has s x).
-intros.
-split.
-simpl.
-intro.
-exact (id_get_has H).
-intro.
-simpl.
-exact (StratId s H).
-exact (downset_extensionality H).
-Qed.
-
-Lemma sym {a} {x y : a} : x = y -> y = x.
-auto.
-Qed.
-
-Lemma strat_mult_unit_id {esig a} : @strat_mult esig a ∘ strat_unit = strat_id.
-Proof.
-extensionality s.
-assert (forall p, has ((@strat_mult esig a ∘ strat_unit) s) p <-> has (strat_id s) p).
-intro.
-split.
-intro.
-rewrite strat_id_idem.
-destruct H.
-destruct H0.
-inversion H.
-exact H0.
-induction h.
-inversion ord0. subst.
-exact H0. subst.
-exact (IHh (ord_play_trans_prf _ _ _ ord0 ord1)).
-Admitted.
-
-Lemma strat_mult_fmap_unit_id {esig a} : @strat_mult esig a ∘ strat_fmap strat_unit = strat_id.
+Lemma strat_mult_fmap_unit_id {esig a} : @strat_mult esig a ∘ strat_fmap strat_unit = id.
 Admitted.
 
 Lemma strat_mult_assoc {esig a} : @strat_mult esig a ∘ strat_fmap strat_mult = strat_mult ∘ strat_mult.
@@ -295,8 +340,6 @@ Local Instance strat_monad {esig} : monad (strat esig) := {
   unit _ := strat_unit;
   fmap _ _ := strat_fmap;
   mult _ := strat_mult;
-  id _ := strat_id;
-  id_idem _ _ := strat_id_idem;
   mult_unit_id _ := strat_mult_unit_id;
   mult_fmap_unit_id _ := strat_mult_fmap_unit_id;
   mult_assoc _ := strat_mult_assoc
@@ -415,19 +458,55 @@ Inductive unit_ty : Type :=
 Definition strat_bind {esig a b} (s : strat esig a) (k : a -> strat esig b) : strat esig b :=
   strat_mult (strat_fmap k s).
 
-Axiom strat_star : forall {esig a}, strat esig a -> strat esig a.
-Inductive strat_star_has {esig a} (s : strat esig a) : play esig a -> Prop :=
-| StratStarBot {p} (_ : has strat_bottom p) : strat_star_has s p
-| StratStarOne {p} (_ : has s p) : strat_star_has s p
-| StratStarMany {p} (_ : has (strat_bind s (fun _ => strat_star s)) p) : strat_star_has s p
-| StratStarDownclose (p1 p2 : _) (ord : ord_play p1 p2) (h : strat_star_has s p2) : strat_star_has s p1.
-Axiom DEFINE_strat_star :
-  forall {esig a} {s : strat esig a},
-    strat_star s =
-      mk_downset
-        (play_poset esig a)
-        (strat_star_has s)
-        (StratStarDownclose s).
+Notation "s1 + s2" := (strat_plus s1 s2) (at level 50, left associativity).
+(* Notation "s *" := (strat_star s) (at level 49). *)
+Notation "x <- s1 ;; s2" := (strat_bind s1 (fun x => s2)) (at level 61, s1 at next level, right associativity).
+Notation "s1 ;; s2" := (strat_bind s1 (fun _ => s2)) (at level 61, right associativity).
+
+(*
+strat_star_n_has 0 a = mult . fmap unit
+
+strat_star_n_has (S n) a = \exists a' . strat_star_n_has n a' /\ a = a';a
+
+strat_star_has a =  \exists n . strat_star_n_has n a
+*)
+(* Fixpoint strat_star_n {esig a} (n : nat) (s : strat esig a) : strat esig a :=
+  match n with
+  | S m => s ;; strat_star_n m s
+  | Z => s
+  end.
+Definition strat_star_has {esig a} (s : strat esig a) : play esig a -> Prop :=
+  fun p => exists n, has (strat_star_n n s) p. *)
+
+(* Fixpoint strat_star_n_has {esig a} (n : nat) (s : strat esig a) (p : play esig a) : Prop :=
+  match n with
+  | 0 => strat_mult_has (fmap unit s) p
+  | S m => exists a0, 
+  end. *)
+
+Fixpoint strat_star_n {esig a} (n : nat) (s : strat esig a) : strat esig a :=
+  match n with
+  | 0 => s
+  | S m => s ;; strat_star_n m s
+  end.
+
+Definition strat_star_has {esig a} (s : strat esig a) (p : play esig a) : Prop :=
+  exists n, has (strat_star_n n s) p.
+
+Lemma strat_star_closed {esig a} (s : strat esig a) : closed_strat esig a (strat_star_has s).
+Admitted.
+
+Definition strat_star {esig a} (s : strat esig a) : strat esig a :=
+  mk_downset
+    (play_poset esig a)
+    (strat_star_has s)
+    (strat_star_closed s).
+
+Definition strat_star {esig a} (s : strat esig a) : strat esig a :=
+  mk_downset
+    (play_poset esig a)
+    (strat_star_has s)
+    (strat_star_closed s).
 
 Inductive strat_emp_has {esig a} : play esig a -> Prop :=
 | StratEmp : strat_emp_has []
@@ -456,10 +535,6 @@ Definition strat_invoke {esig} (l : label esig) (x : par esig l) : strat esig (a
     (strat_invoke_has l x)
     (StratInvokeDownclose l x).
 
-Notation "s1 + s2" := (strat_plus s1 s2) (at level 50, left associativity).
-(* Notation "s *" := (strat_star s) (at level 49). *)
-Notation "x <- s1 ;; s2" := (strat_bind s1 (fun x => s2)) (at level 61, s1 at next level, right associativity).
-Notation "s1 ;; s2" := (strat_bind s1 (fun _ => s2)) (at level 61, right associativity).
 Notation "l [ esig , x ]" := (@strat_invoke esig l x) (at level 2).
 
 Definition sif {esig a} (b : bool) (s1 s2 : strat esig a) : strat esig a :=
@@ -473,16 +548,8 @@ Definition nat_sig : effect_sig := {|
   ar := const nat
 |}.
 
-Definition state_sig (a : Type) : effect_sig := {|
-  label := bool;
-  par := fun b =>
-    if b then (* get *)
-      unit_ty
-    else (* set *)
-      a;
-  ar := fun b =>
-    if b then
-      a
-    else
-      unit_ty
-|}.
+Example ex1 : strat nat_sig nat :=
+  n <- tt [ nat_sig , 0 ] ;;
+  sif (n <? 4)
+    (while true (tt [ nat_sig , 14 ]))
+    (ret (S n)).
