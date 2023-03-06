@@ -1,22 +1,11 @@
-Require Import Coq.Classes.RelationClasses.
-Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.Logic.FunctionalExtensionality.
 Require Import Coq.Logic.PropExtensionality.
 Require Import Coq.Program.Basics.
-Load "Monad.v".
+Open Scope program_scope.
+Load "theories/Monad.v".
+Load "theories/Poset.v".
 
 Axiom predicate_extensionality : forall {a} {P Q : a -> Prop}, (forall x, P x <-> Q x) -> P = Q.
-
-Class poset (a : Type) := {
-  ord : relation a;
-  ord_refl {x} : ord x x;
-  ord_trans {x y z} : ord x y -> ord y z -> ord x z;
-  ord_antisym {x y} : ord x y -> ord y x -> x = y
-}.
-Arguments ord {a} {poset}.
-Arguments ord_refl {a} {poset} {x}.
-Arguments ord_trans {a} {poset} {x y z}.
-Arguments ord_antisym {a} {poset} {x y}.
 
 Record downset (a : Type) {pset : poset a} := mk_downset {
   has : a -> Prop;
@@ -49,29 +38,24 @@ Inductive ord_downset {a} `{poset a} : relation (downset a) :=
 | OrdDownset {dset0 dset1} (incl : forall x, has dset0 x -> has dset1 x) : ord_downset dset0 dset1.
 
 Global Instance downset_poset {a} `{poset a} : poset (downset a).
-refine {|
-  ord := ord_downset;
-  ord_refl := _;
-  ord_trans := _;
-  ord_antisym := _
-|}.
+apply (mk_poset ord_downset).
 intro.
 exact (OrdDownset (fun _ h => h)).
 intros.
 induction H0, H1.
-refine (OrdDownset _).
+apply OrdDownset.
 intros.
 exact (incl0 x (incl x H0)).
 intros.
 induction H0, H1.
-refine (downset_extensionality _).
+apply downset_extensionality.
 intro.
 split.
 exact (incl x).
 exact (incl0 x).
 Defined.
 
-Lemma downset_inclusion {a} `{poset a} {dset0 dset1} : forall {x}, ord_downset dset0 dset1 -> has dset0 x -> has dset1 x.
+Theorem downset_inclusion {a} `{poset a} {dset0 dset1} : forall {x}, ord_downset dset0 dset1 -> has dset0 x -> has dset1 x.
 intros.
 induction H0.
 exact (incl x H1).
@@ -80,7 +64,7 @@ Qed.
 Definition downclose_has {a} `{poset a} (has : a -> Prop) : a -> Prop :=
   fun x => exists y, has y /\ ord x y.
 
-Lemma downclose_has_is_downclosed {a} `{poset a} {has : a -> Prop} :
+Theorem downclose_has_is_downclosed {a} `{poset a} {has : a -> Prop} :
   forall x y, ord x y -> downclose_has has y -> downclose_has has x.
 rename H into pset.
 intros.
@@ -120,7 +104,7 @@ Definition downset_mult {a} `{poset a} (dset : downset (downset a)) : downset a 
 Lemma downset_mult_unit_id {a} `{poset a} : downset_mult (a:=a) ∘ downset_unit = id.
 unfold compose.
 extensionality dset.
-refine (downset_extensionality _).
+apply downset_extensionality.
 intro.
 split.
 intro.
@@ -150,7 +134,7 @@ Qed.
 Lemma downset_mult_fmap_unit_id {a} `{poset a} : downset_mult (a:=a) ∘ downset_fmap downset_unit = id.
 unfold compose.
 extensionality dset.
-refine (downset_extensionality _).
+apply downset_extensionality.
 intro.
 split.
 intro.
@@ -164,7 +148,7 @@ destruct h0.
 destruct H2.
 destruct H2.
 assert (ord (downset_unit x1) dset).
-refine (OrdDownset _).
+apply OrdDownset.
 intros.
 induction H2.
 destruct H2.
@@ -176,10 +160,10 @@ exact (downset_inclusion H2 H0).
 intro.
 exists x.
 split.
-refine (DsetMultHas _ (dset1:= downset_unit x) _ _).
+apply (DsetMultHas _ (dset1:= downset_unit x)).
 exists (downset_unit x).
 split.
-refine (DsetFmapHas _ _ _).
+apply DsetFmapHas.
 exact H0.
 exact ord_refl.
 exists x.
@@ -192,9 +176,10 @@ Qed.
 Lemma downset_mult_assoc {a} `{poset a} : downset_mult (a:=a) ∘ downset_fmap downset_mult = downset_mult ∘ downset_mult.
 unfold compose.
 extensionality dddset.
-refine (downset_extensionality _).
+apply downset_extensionality.
 intro.
 split.
 intro.
 admit.
 intro.
+Admitted.
