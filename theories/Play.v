@@ -1,10 +1,12 @@
 Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.Logic.PropExtensionality.
+Require Import Coq.Logic.FunctionalExtensionality.
 Require Import Coq.Logic.JMeq.
 Require Import Coq.Program.Basics.
 Open Scope program_scope.
 Load "theories/Poset.v".
+Load "theories/Monad.v".
 
 Record effect_sig := mk_effect_sig {
   label : Type;
@@ -99,52 +101,15 @@ exact (rec _ _ _ H ord_p).
 Qed.
 
 Lemma ord_play_antisym {esig a} : forall {p0 p1 : play esig a}, ord_play p0 p1 -> ord_play p1 p0 -> p0 = p1.
-fix rec 4.
 intros.
-destruct p0, p1.
+induction H.
+exact (eq_sym (pfx_nil_is_nil H0)).
+reflexivity.
 reflexivity.
 inversion H0.
-inversion H0.
-inversion H0.
-inversion H.
-inversion H.
-reflexivity.
-inversion H0.
-inversion H.
-inversion H.
-inversion H.
-inversion H.
-rewrite (projT2_eq H3).
-reflexivity.
-inversion H0.
-inversion H.
-inversion H.
-inversion H.
-inversion H0.
-generalize dependent x. generalize dependent x2.
-generalize dependent v. generalize dependent v2.
-rewrite (eq_sym H6).
-intros.
-assert (v = v0).
-transitivity v2.
-exact (eq_sym (projT2_eq H8)).
-exact (projT2_eq H4).
-assert (x = x0).
-transitivity x2.
-exact (eq_sym (projT2_eq H7)).
-exact (projT2_eq H3).
-rewrite H1.
-rewrite H10.
 f_equal.
-rewrite (eq_sym H9).
-rewrite H1 in H.
-rewrite H10 in H.
-assert (ord_play p0 p1).
-exact (peel_InvResPrefix H).
-assert (p1 = p0).
-inversion H.
-exact (rec _ _ ord_p ord_p0).
-exact (eq_trans H9 (eq_sym H12)).
+apply IHord_play.
+exact (peel_InvResPrefix H0).
 Qed.
 
 Global Instance play_poset {esig a} : poset (play esig a) := {|
@@ -153,3 +118,62 @@ Global Instance play_poset {esig a} : poset (play esig a) := {|
   ord_trans _ _ _ := ord_play_trans;
   ord_antisym _ _ := ord_play_antisym
 |}.
+
+Definition play_unit {esig a} (x : a) : play esig a :=
+  Ret x.
+
+Fixpoint play_fmap {esig a b} (f : a -> b) (p : play esig a) : play esig b :=
+  match p with
+  | Ret x => Ret (f x)
+  | Inv l x => Inv l x
+  | Emp => Emp
+  | InvRes l x v p => InvRes l x v (play_fmap f p)
+  end.
+
+Fixpoint play_mult {esig a} (p : play esig (play esig a)) : play esig a :=
+  match p with
+  | Ret p1 => p1
+  | Inv l x => Inv l x
+  | Emp => Emp
+  | InvRes l x v p => InvRes l x v (play_mult p)
+  end.
+
+Global Instance play_monad {esig} : monad (play esig).
+refine {|
+  unit := @play_unit esig;
+  fmap := @play_fmap esig;
+  mult := @play_mult esig;
+  mult_unit_id := _;
+  mult_fmap_unit_id := _;
+  mult_assoc := _;
+|}.
+intros.
+trivial.
+intros.
+extensionality p.
+generalize p.
+fix rec 1.
+intro.
+destruct p0.
+reflexivity.
+reflexivity.
+reflexivity.
+unfold compose.
+unfold id.
+simpl.
+f_equal.
+exact (rec p0).
+intro.
+extensionality p.
+generalize p.
+fix rec 1.
+intro.
+destruct p0.
+reflexivity.
+reflexivity.
+reflexivity.
+unfold compose.
+simpl.
+f_equal.
+exact (rec p0).
+Defined.
