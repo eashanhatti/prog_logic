@@ -1,6 +1,9 @@
 Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Relations.Relation_Definitions.
 Require Import Coq.Logic.PropExtensionality.
+Require Import Coq.Logic.JMeq.
+Require Import Coq.Program.Basics.
+Open Scope program_scope.
 Load "theories/Poset.v".
 
 Record effect_sig := mk_effect_sig {
@@ -8,6 +11,12 @@ Record effect_sig := mk_effect_sig {
   par : label -> Type;
   ar : label -> Type
 }.
+
+Lemma cong (a : Type) (b : a -> Type) : forall (x y : a) (f : forall (z : a), b z), x = y -> JMeq (f x) (f y).
+intros.
+rewrite H.
+reflexivity.
+Qed.
 
 Inductive play (esig : effect_sig) (a : Type) :=
 | Emp : play esig a
@@ -23,8 +32,6 @@ Arguments InvRes {esig} {a}.
 art <= arthur, not arte <= arthure
 art <= arthur, eart <= earthur
 InvRes l x v p -----> l(x) v p
-
-p1 <= p2 ---> p1 <= l(x) v p2
 *)
 Inductive ord_play {esig a} : relation (play esig a) :=
 | EmpPrefix {p} : ord_play Emp p
@@ -57,23 +64,18 @@ apply InvResPrefix.
 exact (rec p).
 Qed.
 
-Lemma help2 {A} {F : A -> Type} {x y z} : existT F x y = existT F x z -> y = z.
+Lemma projT2_eq {A} {F : A -> Type} {x y z} : existT F x y = existT F x z -> y = z.
 intro.
-assert (eq_rect (projT1 (existT F x y)) (fun a : A => F a)
-          (projT2 (existT F x y)) (projT1 (existT F x z)) 
-          (projT1_eq H) = projT2 (existT F x z)).
-exact (projT2_eq H).
-cbv in H0.
-(* Unset Printing Notations.
-Set Printing All. *)
-(* assert (H = eq_refl). *)
-Admitted.
+assert (JMeq (projT2 (existT F x y)) (projT2 (existT F x z))).
+apply (cong {w : A & F w} (F ∘ @projT1 _ _) (existT F x y) (existT F x z) (@projT2 _ _) H).
+exact (JMeq_eq H0).
+Qed.
 
-Lemma help {esig a l x v} : forall {p0 p1 : play esig a}, ord_play (InvRes l x v p0) p1 -> ord_play (Inv l x) p1.
+Lemma peel_res {esig a l x v} : forall {p0 p1 : play esig a}, ord_play (InvRes l x v p0) p1 -> ord_play (Inv l x) p1.
 intros.
 inversion H. subst.
 assert (x1 = x).
-exact (help2 H2).
+exact (projT2_eq H2).
 rewrite H0.
 exact InvInvResPrefix.
 Qed.
@@ -85,12 +87,12 @@ induction H.
 exact EmpPrefix.
 exact H0.
 exact H0.
-exact (help H0).
+exact (peel_res H0).
 inversion H0.
 assert (x1 = x).
-exact (help2 H3).
+exact (projT2_eq H3).
 assert (v1 = v).
-exact (help2 H4).
+exact (projT2_eq H4).
 rewrite H6. rewrite H7.
 apply InvResPrefix.
 exact (rec _ _ _ H ord_p).
@@ -112,7 +114,7 @@ inversion H.
 inversion H.
 inversion H.
 inversion H.
-rewrite (help2 H3).
+rewrite (projT2_eq H3).
 reflexivity.
 inversion H0.
 inversion H.
@@ -125,12 +127,12 @@ rewrite (eq_sym H6).
 intros.
 assert (v = v0).
 transitivity v2.
-exact (eq_sym (help2 H8)).
-exact (help2 H4).
+exact (eq_sym (projT2_eq H8)).
+exact (projT2_eq H4).
 assert (x = x0).
 transitivity x2.
-exact (eq_sym (help2 H7)).
-exact (help2 H3).
+exact (eq_sym (projT2_eq H7)).
+exact (projT2_eq H3).
 rewrite H1.
 rewrite H10.
 f_equal.
