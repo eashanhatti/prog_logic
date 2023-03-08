@@ -78,6 +78,7 @@ Qed.
 
 Inductive downset_unit_has {a} (x : a) : a -> Prop :=
 | DsetUnitHas : downset_unit_has x x.
+Arguments DsetUnitHas {a} {x}.
 
 Definition downset_unit {a} `{poset a} (x : a) : downset a := {|
   has := downclose_has (downset_unit_has x);
@@ -86,6 +87,7 @@ Definition downset_unit {a} `{poset a} (x : a) : downset a := {|
 
 Inductive downset_fmap_has {a b} `{poset a} (f : a -> b) (dset : downset a) : b -> Prop :=
 | DsetFmapHas {x} (h : has dset x): downset_fmap_has f dset (f x).
+Arguments DsetFmapHas {a} {b} {H} {f} {dset} {x}.
 
 Definition downset_fmap {a b} `{poset a} `{poset b} (f : a -> b) (dset : downset a) : downset b := {|
   has := downclose_has (downset_fmap_has f dset);
@@ -93,8 +95,8 @@ Definition downset_fmap {a b} `{poset a} `{poset b} (f : a -> b) (dset : downset
 |}.
 
 Inductive downset_mult_has {a} `{poset a} (dset0 : downset (downset a)) : a -> Prop :=
-| DsetMultHas {dset1} {x} (h0 : has dset0 dset1) (h1 : has dset1 x) : downset_mult_has dset0 x.
-
+| DsetMultHas (dset1 : downset a) {x} (h0 : has dset0 dset1) (h1 : has dset1 x) : downset_mult_has dset0 x.
+Arguments DsetMultHas {a} {H} {dset0}.
 
 Definition downset_mult {a} `{poset a} (dset : downset (downset a)) : downset a := {|
   has := downclose_has (downset_mult_has dset);
@@ -125,7 +127,7 @@ split.
 exists dset.
 exists dset.
 split.
-exact (DsetUnitHas dset).
+exact DsetUnitHas.
 exact ord_refl.
 exact H0.
 exact ord_refl.
@@ -160,7 +162,7 @@ exact (downset_inclusion H2 H0).
 intro.
 exists x.
 split.
-apply (DsetMultHas _ (dset1:= downset_unit x)).
+apply (DsetMultHas (downset_unit x)).
 exists (downset_unit x).
 split.
 apply DsetFmapHas.
@@ -168,18 +170,14 @@ exact H0.
 exact ord_refl.
 exists x.
 split.
-exact (DsetUnitHas x).
+exact DsetUnitHas.
 exact ord_refl.
 exact ord_refl.
 Qed.
 
 Lemma downset_mult_assoc {a} `{poset a} : downset_mult (a:=a) ∘ downset_fmap downset_mult = downset_mult ∘ downset_mult.
-unfold compose.
 extensionality dddset.
 apply downset_extensionality.
 intro.
 split.
 intro.
-admit.
-intro.
-Admitted.
