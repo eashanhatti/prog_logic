@@ -138,6 +138,7 @@ Fixpoint play_mult {esig a} (p : play esig (play esig a)) : play esig a :=
   | InvRes l x v p => InvRes l x v (play_mult p)
   end.
 
+(*Use Next Obligation to clean up*)
 Global Instance play_monad {esig} : monad (play esig).
 refine {|
   unit := @play_unit esig;

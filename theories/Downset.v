@@ -175,9 +175,77 @@ exact ord_refl.
 exact ord_refl.
 Qed.
 
+Lemma downset_mult_orig_set {a} `{poset a} {ddset : downset (downset a)} {dset : downset a} {x : a} :
+  ord dset (downset_mult ddset) -> has dset x -> exists dset1, has ddset dset1 /\ has dset1 x.
+intros.
+assert (has (downset_mult ddset) x).
+exact (downset_inclusion H0 H1).
+destruct H2.
+destruct H2.
+destruct H2.
+exists dset1.
+split.
+exact h0.
+exact (downclosed dset1 H3 h1).
+Qed.
+
+Lemma mult_subset {a} `{poset a} {ddset : downset (downset a)} {dset : downset a} :
+  has ddset dset -> ord dset (downset_mult ddset).
+intro.
+apply OrdDownset.
+intros.
+exists x.
+split.
+apply (DsetMultHas dset).
+exact H0.
+exact H1.
+exact ord_refl.
+Qed.
+
 Lemma downset_mult_assoc {a} `{poset a} : downset_mult (a:=a) ∘ downset_fmap downset_mult = downset_mult ∘ downset_mult.
 extensionality dddset.
 apply downset_extensionality.
 intro.
 split.
 intro.
+exists x.
+split.
+destruct H0.
+destruct H0.
+destruct H0.
+destruct h0.
+destruct H0.
+destruct H0.
+assert (exists dset2, has x1 dset2 /\ has dset2 x0).
+exact (downset_mult_orig_set H2 h1).
+destruct H0.
+destruct H0.
+apply (DsetMultHas x2).
+exists x2.
+split.
+apply (DsetMultHas x1).
+exact h.
+exact H0.
+exact ord_refl.
+exact (downclosed x2 H1 H3).
+exact ord_refl.
+intro.
+exists x.
+split.
+destruct H0.
+destruct H0.
+destruct H0.
+destruct h0.
+destruct H0.
+destruct H0.
+apply (DsetMultHas dset1).
+exists (downset_mult dset0).
+split.
+constructor.
+exact h0.
+assert (has dset0 dset1).
+exact (downclosed dset0 H2 h2).
+exact (mult_subset H0).
+exact (downclosed dset1 H1 h1).
+exact ord_refl.
+Qed.
